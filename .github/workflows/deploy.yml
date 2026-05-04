@@ -36,8 +36,8 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Publish only the basic-vanilla app
-          path: basic-vanilla
+          # Publish the repo root so all PWA examples are reachable at their own paths
+          path: .
 
       - name: Deploy to GitHub Pages
         id: deploy
