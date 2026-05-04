@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PWA Examples</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: system-ui, sans-serif;
+        background: #f5f5f5;
+        color: #1a1a1a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100svh;
+        padding: 2rem 1rem;
+      }
+
+      h1 { font-size: 2rem; margin-bottom: 0.4rem; text-align: center; }
+
+      .subtitle { color: #666; margin-bottom: 2.5rem; text-align: center; }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1.25rem;
+        width: 100%;
+        max-width: 640px;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 1rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        padding: 1.75rem 1.5rem;
+        text-decoration: none;
+        color: inherit;
+        transition: transform 0.15s, box-shadow 0.15s;
+        display: block;
+      }
+      .card:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,0.13); }
+
+      .card-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+      .card h2 { font-size: 1.1rem; margin-bottom: 0.4rem; }
+      .card p { font-size: 0.875rem; color: #666; line-height: 1.5; }
+
+      .tag {
+        display: inline-block;
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 999px;
+        margin-top: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+      }
+
+      .indigo { border-left: 4px solid #4f46e5; }
+      .indigo .tag { background: #ede9fe; color: #4f46e5; }
+
+      .teal { border-left: 4px solid #0d9488; }
+      .teal .tag { background: #ccfbf1; color: #0d9488; }
+    </style>
+  </head>
+  <body>
+    <h1>PWA Examples</h1>
+    <p class="subtitle">Progressive Web App demos built with vanilla HTML, CSS &amp; JavaScript.</p>
+
+    <div class="grid">
+      <a class="card indigo" href="basic-vanilla/">
+        <div class="card-icon">⚡</div>
+        <h2>Basic Vanilla PWA</h2>
+        <p>A minimal app shell with offline support via a cache-first service worker.</p>
+        <span class="tag">Service Worker · Cache API</span>
+      </a>
+
+      <a class="card teal" href="basic-indexeddb/">
+        <div class="card-icon">🗄️</div>
+        <h2>IndexedDB PWA</h2>
+        <p>Fetches user data from a remote API and stores it in IndexedDB so it remains accessible offline.</p>
+        <span class="tag">IndexedDB · Offline Data</span>
+      </a>
+    </div>
+  </body>
+</html>
