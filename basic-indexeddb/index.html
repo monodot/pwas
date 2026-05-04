@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d9488" />
+    <meta name="description" content="A PWA that fetches data and stores it in IndexedDB for offline access." />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <title>IndexedDB PWA</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: system-ui, sans-serif;
+        background: #f0fdfa;
+        color: #1a1a1a;
+        min-height: 100svh;
+        padding: 1.5rem 1rem;
+      }
+
+      header {
+        max-width: 640px;
+        margin: 0 auto 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      h1 { font-size: 1.4rem; color: #0d9488; }
+
+      #status {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.65rem;
+        border-radius: 999px;
+        display: inline-block;
+      }
+      .online  { background: #d1fae5; color: #065f46; }
+      .offline { background: #fee2e2; color: #991b1b; }
+
+      .toolbar {
+        max-width: 640px;
+        margin: 0 auto 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      #last-synced { font-size: 0.8rem; color: #555; }
+
+      button {
+        background: #0d9488;
+        color: #fff;
+        border: none;
+        border-radius: 0.5rem;
+        padding: 0.45rem 1rem;
+        font-size: 0.875rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+      button:hover { background: #0f766e; }
+      button:disabled { background: #99d6cf; cursor: not-allowed; }
+
+      #message {
+        max-width: 640px;
+        margin: 0 auto 1rem;
+        font-size: 0.85rem;
+        color: #555;
+        min-height: 1.2em;
+      }
+
+      .user-list {
+        max-width: 640px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .user-card {
+        background: #fff;
+        border-radius: 0.75rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+        padding: 1rem 1.25rem;
+      }
+
+      .user-card h2 { font-size: 1rem; margin-bottom: 0.25rem; color: #0d9488; }
+
+      .user-card .meta {
+        font-size: 0.8rem;
+        color: #777;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.25rem;
+        margin-top: 0.35rem;
+      }
+
+      .empty { text-align: center; padding: 3rem 1rem; color: #999; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>IndexedDB PWA</h1>
+      <span id="status" class="online">● Online</span>
+    </header>
+
+    <div class="toolbar">
+      <span id="last-synced">No data cached yet.</span>
+      <button id="sync-btn">↻ Sync</button>
+    </div>
+
+    <p id="message"></p>
+
+    <div class="user-list" id="user-list">
+      <div class="empty">Loading…</div>
+    </div>
+
+    <script>
+      const DB_NAME     = 'indexeddb-pwa';
+      const DB_VERSION  = 1;
+      const USERS_STORE = 'users';
+      const META_STORE  = 'meta';
+
+      function openDB() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = e => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(USERS_STORE))
+              db.createObjectStore(USERS_STORE, { keyPath: 'id' });
+            if (!db.objectStoreNames.contains(META_STORE))
+              db.createObjectStore(META_STORE);
+          };
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      function txGet(db, store, key) {
+        return new Promise((resolve, reject) => {
+          const req = db.transaction(store).objectStore(store).get(key);
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      function txGetAll(db, store) {
+        return new Promise((resolve, reject) => {
+          const req = db.transaction(store).objectStore(store).getAll();
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      function txPut(db, store, value, key) {
+        return new Promise((resolve, reject) => {
+          const tx  = db.transaction(store, 'readwrite');
+          const req = key !== undefined
+            ? tx.objectStore(store).put(value, key)
+            : tx.objectStore(store).put(value);
+          req.onsuccess = e => resolve(e.target.result);
+          req.onerror   = e => reject(e.target.error);
+        });
+      }
+
+      function txPutAll(db, store, items) {
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(store, 'readwrite');
+          const os = tx.objectStore(store);
+          os.clear();
+          items.forEach(item => os.put(item));
+          tx.oncomplete = () => resolve();
+          tx.onerror    = e  => reject(e.target.error);
+        });
+      }
+
+      const listEl     = document.getElementById('user-list');
+      const syncBtn    = document.getElementById('sync-btn');
+      const messageEl  = document.getElementById('message');
+      const lastSyncEl = document.getElementById('last-synced');
+      const statusEl   = document.getElementById('status');
+
+      function renderUsers(users) {
+        if (!users.length) {
+          listEl.innerHTML = '<div class="empty">No data — go online and tap Sync.</div>';
+          return;
+        }
+        listEl.innerHTML = users.map(u => `
+          <div class="user-card">
+            <h2>${u.name}</h2>
+            <div class="meta">
+              <span>✉ ${u.email}</span>
+              <span>📞 ${u.phone}</span>
+              <span>🌐 ${u.website}</span>
+              <span>🏢 ${u.company.name}</span>
+            </div>
+          </div>`).join('');
+      }
+
+      function setMessage(text) { messageEl.textContent = text; }
+
+      function updateStatus() {
+        if (navigator.onLine) {
+          statusEl.textContent = '● Online';
+          statusEl.className   = 'online';
+        } else {
+          statusEl.textContent = '● Offline';
+          statusEl.className   = 'offline';
+        }
+      }
+
+      const API_URL = 'https://jsonplaceholder.typicode.com/users';
+
+      async function loadFromDB(db) {
+        const users    = await txGetAll(db, USERS_STORE);
+        const syncedAt = await txGet(db, META_STORE, 'syncedAt');
+        if (users.length) {
+          renderUsers(users);
+          lastSyncEl.textContent = syncedAt
+            ? `Last synced: ${new Date(syncedAt).toLocaleString()}`
+            : 'Loaded from cache.';
+        }
+        return users;
+      }
+
+      async function fetchAndStore(db) {
+        syncBtn.disabled = true;
+        setMessage('Fetching from network…');
+        try {
+          const res   = await fetch(API_URL);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const users = await res.json();
+          await txPutAll(db, USERS_STORE, users);
+          const now = new Date().toISOString();
+          await txPut(db, META_STORE, now, 'syncedAt');
+          renderUsers(users);
+          lastSyncEl.textContent = `Last synced: ${new Date(now).toLocaleString()}`;
+          setMessage('Data refreshed and saved to IndexedDB.');
+        } catch (err) {
+          setMessage(`Sync failed: ${err.message}. Showing cached data.`);
+        } finally {
+          syncBtn.disabled = false;
+        }
+      }
+
+      async function init() {
+        updateStatus();
+        window.addEventListener('online',  updateStatus);
+        window.addEventListener('offline', updateStatus);
+
+        const db = await openDB();
+
+        const cached = await loadFromDB(db);
+        if (!cached.length) setMessage('No cached data yet.');
+
+        if (navigator.onLine) await fetchAndStore(db);
+
+        syncBtn.addEventListener('click', () => {
+          if (!navigator.onLine) {
+            setMessage('You are offline. Connect to the internet to sync.');
+            return;
+          }
+          fetchAndStore(db);
+        });
+      }
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js')
+            .then(r => console.log('SW registered:', r.scope))
+            .catch(e => console.error('SW registration failed:', e));
+        });
+      }
+
+      init();
+    </script>
+  </body>
+</html>
